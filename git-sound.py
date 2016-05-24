@@ -77,30 +77,6 @@ def get_file_sha(commit, file_name):
 
     return t.hexsha
 
-def gen_note(commit):
-    stat = commit.stats
-    note = sha_to_note(commit.hexsha)
-
-    file_notes = []
-
-    for file_name, file_stat in stat.files.items():
-        file_notes.append({
-            'note': sha_to_note(get_file_sha(commit, file_name)) +
-            program['file']['octave'] * 12,
-            'volume': gen_volume(file_stat['deletions'],
-                                 file_stat['insertions'],
-                                 deviation=10),
-        })
-
-    return {
-        'commit_note': sha_to_note(commit.hexsha) +
-        program['commit']['octave'] * 12,
-        'commit_volume': gen_volume(stat.total['deletions'],
-                                    stat.total['insertions'],
-                                    deviation=20),
-        'file_notes': file_notes,
-    }
-
 
 class GitMIDI(MIDIFile):
     def __setup_midi(self, track_title=None):
@@ -141,6 +117,30 @@ class GitMIDI(MIDIFile):
         self.__setup_midi()
         self.__setup_repo()
 
+    def gen_beat(self, commit):
+        stat = commit.stats
+        note = sha_to_note(commit.hexsha)
+
+        file_notes = []
+
+        for file_name, file_stat in stat.files.items():
+            file_notes.append({
+                'note': sha_to_note(get_file_sha(commit, file_name)) +
+                program['file']['octave'] * 12,
+                'volume': gen_volume(file_stat['deletions'],
+                                     file_stat['insertions'],
+                                     deviation=10),
+            })
+
+        return {
+            'commit_note': sha_to_note(commit.hexsha) +
+            program['commit']['octave'] * 12,
+            'commit_volume': gen_volume(stat.total['deletions'],
+                                        stat.total['insertions'],
+                                        deviation=20),
+            'file_notes': file_notes,
+        }
+
     def gen_repo_data(self, force=False):
         """
         Populate __repo_data with the Git history data. If force is
@@ -179,6 +179,9 @@ class GitMIDI(MIDIFile):
 
         if self.__verbose:
             print("Generating MIDI data…")
+
+        self.git_log = map(lambda commit: self.gen_beat(commit),
+                           self.__repo_data)
 
     @property
     def repo_data(self):
@@ -240,8 +243,7 @@ except IndexError:
     sys.exit(1)
 
 repo_midi.gen_repo_data()
-orig_log = repo_midi.git_log
-log = map(gen_note, orig_log)
+log = repo_midi.git_log
 
 if args.verbose:
     print("Creating MIDI…")
