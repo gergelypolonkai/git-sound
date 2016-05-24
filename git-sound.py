@@ -13,9 +13,37 @@ from git import Repo
 from git.objects.blob import Blob
 from git.exc import InvalidGitRepositoryError
 
-# The original scale was: [60, 62, 64, 65, 67, 69, 71]
-notes = [68, 69, 71, 72, 74, 76, 77]
+scales = {
+    'c-major': [60, 62, 64, 65, 67, 69, 71],
+    'a-harmonic-minor': [68, 69, 71, 72, 74, 76, 77],
+    'chromatic': [60, 61, 62, 63, 64, 65, 66, 67, 68, 69],
+}
+notes = scales['a-harmonic-minor']
 notecount = len(notes)
+
+programs = {
+    'sitar-tablah': {
+        'commit': {
+            'program': 104,
+            'octave': -2,
+        },
+        'file': {
+            'program': 115,
+            'octave': -1,
+        },
+    },
+    'bells': {
+        'commit': {
+            'program': 14,
+            'octave': 0,
+        },
+        'file': {
+            'program': 9,
+            'octave': 0,
+        },
+    },
+}
+program = programs['sitar-tablah']
 
 
 def gen_volume(deletions, insertions, deviation=10):
@@ -57,14 +85,16 @@ def gen_note(commit):
 
     for file_name, file_stat in stat.files.items():
         file_notes.append({
-            'note': sha_to_note(get_file_sha(commit, file_name)) - 12,
+            'note': sha_to_note(get_file_sha(commit, file_name)) +
+            program['file']['octave'] * 12,
             'volume': gen_volume(file_stat['deletions'],
                                  file_stat['insertions'],
                                  deviation=10),
         })
 
     return {
-        'commit_note': sha_to_note(commit.hexsha) - 24,
+        'commit_note': sha_to_note(commit.hexsha) +
+        program['commit']['octave'] * 12,
         'commit_volume': gen_volume(stat.total['deletions'],
                                     stat.total['insertions'],
                                     deviation=20),
@@ -210,8 +240,10 @@ decor_channel = 1
 # Duration of one note
 duration = 0.3
 
-repo_midi.addProgramChange(track, log_channel, 0, 104)
-repo_midi.addProgramChange(track, decor_channel, 0, 115)
+repo_midi.addProgramChange(track, log_channel,
+                           0, program['commit']['program'])
+repo_midi.addProgramChange(track, decor_channel,
+                           0, program['file']['program'])
 
 # WRITE THE SEQUENCE
 for section in log:
