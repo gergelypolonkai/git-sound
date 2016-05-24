@@ -104,6 +104,9 @@ def gen_note(commit):
 
 class GitMIDI(MIDIFile):
     def __setup_midi(self, track_title=None):
+        if self.__verbose:
+            print("Preparing MIDI track…")
+
         if track_title is None:
             # TODO: Change this to something that connects to the repo
             self.addTrackName(0, 0, "Sample Track")
@@ -112,20 +115,20 @@ class GitMIDI(MIDIFile):
             self.addTempo(0, 0, 120)
 
     def __setup_repo(self):
+        if self.__verbose:
+            print("Analyzing repository…")
+
         repo = Repo(self.__repo_dir)
         self.branch_head = repo.heads[self.__branch].commit
 
-    def __init__(self, tracks=None, repository='.', branch='master'):
-        if tracks is None:
-            tracks = [("Sample Track", 120)]
+    def __init__(self,
+                 repository='.',
+                 branch='master',
+                 verbose=False):
 
-        self.track_count = len(tracks)
+        MIDIFile.__init__(self, 1)
 
-        MIDIFile.__init__(self, self.track_count)
-
-        self.__setup_midi()
-
-        self.mem_file = StringIO()
+        self.__verbose = verbose
         self.__written = False
         self.__repo_dir = repository
         self.__repo = None
@@ -133,7 +136,9 @@ class GitMIDI(MIDIFile):
         self.branch_head = None
         self.__repo_data = None
         self.git_log = []
+        self.mem_file = StringIO()
 
+        self.__setup_midi()
         self.__setup_repo()
 
     def gen_repo_data(self, force=False):
@@ -146,23 +151,34 @@ class GitMIDI(MIDIFile):
         if self.__repo_data and not force:
             return
 
-        self.git_log = []
+        if self.__verbose:
+            print("Reading repository log…")
+
+        self.__repo_data = []
         counter = 0
         to_process = [self.branch_head]
 
         while len(to_process) > 0:
             counter += 1
 
-            if counter % 500 == 0:
+            # TODO: Make this 500 configurable
+            if counter % 500 == 0 and self.__verbose:
                 print("Done with {} commits".format(counter))
 
             commit = to_process.pop()
 
-            if not commit in self.git_log:
-                self.git_log.append(commit)
+            if not commit in self.__repo_data:
+                self.__repo_data.append(commit)
                 to_process += commit.parents
 
-        self.git_log.sort(key=lambda commit: commit.authored_date)
+        if self.__verbose:
+            print("{} commits found".format(counter))
+            print("Sorting commits…")
+
+        self.__repo_data.sort(key=lambda commit: commit.authored_date)
+
+        if self.__verbose:
+            print("Generating MIDI data…")
 
     @property
     def repo_data(self):
@@ -208,7 +224,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 try:
-    repo_midi = GitMIDI(repository=args.repository, branch=args.branch)
+    repo_midi = GitMIDI(repository=args.repository,
+                        branch=args.branch,
+                        verbose=args.verbose)
 
 except InvalidGitRepositoryError:
     print("{} is not a valid Git repository".format(
@@ -223,10 +241,6 @@ except IndexError:
 
 repo_midi.gen_repo_data()
 orig_log = repo_midi.git_log
-
-if args.verbose:
-    print("Generating MIDI data…")
-
 log = map(gen_note, orig_log)
 
 if args.verbose:
