@@ -18,23 +18,6 @@ notes = [68, 69, 71, 72, 74, 76, 77]
 notecount = len(notes)
 
 
-def gen_history(log, commit):
-    counter = 0
-    to_process = [commit]
-
-    while len(to_process) > 0:
-        counter += 1
-
-        if counter % 500 == 0:
-            print("Done with {} commits".format(counter))
-
-        commit = to_process.pop()
-
-        if not commit in log:
-            log.append(commit)
-            to_process += commit.parents
-
-
 def gen_volume(deletions, insertions, deviation=10):
     return max(
         deviation,
@@ -58,8 +41,8 @@ def get_file_sha(commit, file_name):
         try:
             t = t[elements.pop(0)]
         except KeyError:
-            # The file has been deleted
-            return '0000000000000000000000000000000000000000'
+            # The file has been deleted, return the hash of an empty file
+            return 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391'
 
         if isinstance(t, Blob):
             break
@@ -118,8 +101,45 @@ class GitMIDI(MIDIFile):
         self.__repo = None
         self.__branch = branch
         self.branch_head = None
+        self.__repo_data = None
+        self.git_log = []
 
         self.__setup_repo()
+
+    def gen_repo_data(self, force=False):
+        """
+        Populate __repo_data with the Git history data. If force is
+        False and the repo_data is already calculated, we do not do
+        anything.
+        """
+
+        if self.__repo_data and not force:
+            return
+
+        self.git_log = []
+        counter = 0
+        to_process = [self.branch_head]
+
+        while len(to_process) > 0:
+            counter += 1
+
+            if counter % 500 == 0:
+                print("Done with {} commits".format(counter))
+
+            commit = to_process.pop()
+
+            if not commit in self.git_log:
+                self.git_log.append(commit)
+                to_process += commit.parents
+
+        self.git_log.sort(key=lambda commit: commit.authored_date)
+
+    @property
+    def repo_data(self):
+        if self.__repo_data is None:
+            self.gen_repo_data(force=True)
+
+        return self.__repo_data
 
     def write_mem(self):
         self.writeFile(self.mem_file)
@@ -171,17 +191,8 @@ except IndexError:
 
     sys.exit(1)
 
-orig_log = []
-
-if args.verbose:
-    print("Generating Git log…")
-
-gen_history(orig_log, repo_midi.branch_head.commit)
-
-if args.verbose:
-    print("Sorting commits…")
-
-orig_log.sort(key=lambda commit: commit.authored_date)
+repo_midi.gen_repo_data()
+orig_log = repo_midi.git_log
 
 if args.verbose:
     print("Generating MIDI data…")
