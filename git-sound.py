@@ -89,7 +89,14 @@ def gen_note(commit):
     }
 
 
-class MemMIDI(MIDIFile):
+class GitMIDI(MIDIFile):
+    def __setup_midi(self, track_title=None):
+        if track_title is None:
+            # TODO: Change this to something that connects to the repo
+            self.addTrackName(0, 0, "Sample Track")
+
+            # TODO: Make this configurable
+            self.addTempo(0, 0, 120)
     def __init__(self, tracks=None):
         if tracks is None:
             tracks = [("Sample Track", 120)]
@@ -98,20 +105,19 @@ class MemMIDI(MIDIFile):
 
         MIDIFile.__init__(self, self.track_count)
 
+        self.__setup_midi()
+
         self.mem_file = StringIO()
+        self.__written = False
 
-        if tracks is None:
-            self.addTrackName(0, 0, "Sample Track")
-            self.addTempo(0, 0, 120)
-        else:
-            for idx, (name, tempo) in enumerate(tracks):
-                self.addTrackName(idx, 0, name)
-                self.addTempo(idx, 0, tempo)
-
-    def writeMem(self):
+    def write_mem(self):
         self.writeFile(self.mem_file)
+        self.__written = True
 
-    def exportFile(self, filename):
+    def export_file(self, filename):
+        if not self.__written:
+            self.write_mem()
+
         with open(filename, 'w') as f:
             self.mem_file.seek(0)
             shutil.copyfileobj(self.mem_file, f)
@@ -175,7 +181,7 @@ log = map(gen_note, orig_log)
 if args.verbose:
     print("Creating MIDI…")
 
-MyMIDI = MemMIDI()
+MyMIDI = GitMIDI()
 track = 0
 time = 0
 log_channel = 0
@@ -203,13 +209,13 @@ for section in log:
 
     time += section_len
 
-MyMIDI.writeMem()
+MyMIDI.write_mem()
 
 if args.file:
     if args.verbose:
         print("Saving file to {}".format(args.file))
 
-    MyMIDI.exportFile(args.file)
+    MyMIDI.export_file(args.file)
 
 if args.play:
     if args.verbose:
