@@ -41,7 +41,6 @@ programs = {
         },
     },
 }
-program = programs['sitar-tablah']
 
 
 def get_file_sha(commit, file_name):
@@ -63,6 +62,9 @@ def get_file_sha(commit, file_name):
 
 
 class GitMIDI(MIDIFile):
+    LOG_CHANNEL = 0
+    FILE_CHANNEL = 1
+
     def __setup_midi(self, track_title=None):
         if self.__verbose:
             print("Preparing MIDI track…")
@@ -73,6 +75,11 @@ class GitMIDI(MIDIFile):
 
             # TODO: Make this configurable
             self.addTempo(0, 0, 120)
+
+            self.addProgramChange(0, self.LOG_CHANNEL,
+                                  0, self.__program['commit']['program'])
+            self.addProgramChange(0, self.FILE_CHANNEL,
+                                  0, self.__program['file']['program'])
 
     def __setup_repo(self):
         if self.__verbose:
@@ -85,7 +92,8 @@ class GitMIDI(MIDIFile):
                  repository='.',
                  branch='master',
                  verbose=False,
-                 scale=None):
+                 scale=None,
+                 program=None):
 
         MIDIFile.__init__(self, 1)
 
@@ -99,6 +107,7 @@ class GitMIDI(MIDIFile):
         self.git_log = []
         self.mem_file = StringIO()
         self.__scale = scale
+        self.__program = program
 
         self.__setup_midi()
         self.__setup_repo()
@@ -123,7 +132,7 @@ class GitMIDI(MIDIFile):
         for file_name, file_stat in stat.files.items():
             file_notes.append({
                 'note': self.sha_to_note(get_file_sha(commit, file_name)) +
-                program['file']['octave'] * 12,
+                self.__program['file']['octave'] * 12,
                 'volume': self.gen_volume(file_stat['deletions'],
                                           file_stat['insertions'],
                                           deviation=10),
@@ -131,7 +140,7 @@ class GitMIDI(MIDIFile):
 
         return {
             'commit_note': self.sha_to_note(commit.hexsha) +
-            program['commit']['octave'] * 12,
+            self.__program['commit']['octave'] * 12,
             'commit_volume': self.gen_volume(stat.total['deletions'],
                                              stat.total['insertions'],
                                              deviation=20),
@@ -227,7 +236,8 @@ try:
     repo_midi = GitMIDI(repository=args.repository,
                         branch=args.branch,
                         verbose=args.verbose,
-                        scale=scales['a-harmonic-minor'])
+                        scale=scales['a-harmonic-minor'],
+                        program=programs['sitar-tablah'])
 
 except InvalidGitRepositoryError:
     print("{} is not a valid Git repository".format(
@@ -253,11 +263,6 @@ decor_channel = 1
 
 # Duration of one note
 duration = 0.3
-
-repo_midi.addProgramChange(track, log_channel,
-                           0, program['commit']['program'])
-repo_midi.addProgramChange(track, decor_channel,
-                           0, program['file']['program'])
 
 # WRITE THE SEQUENCE
 for section in log:
