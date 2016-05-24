@@ -97,7 +97,12 @@ class GitMIDI(MIDIFile):
 
             # TODO: Make this configurable
             self.addTempo(0, 0, 120)
-    def __init__(self, tracks=None):
+
+    def __setup_repo(self):
+        repo = Repo(self.__repo_dir)
+        self.branch_head = repo.heads[self.__branch].commit
+
+    def __init__(self, tracks=None, repository='.', branch='master'):
         if tracks is None:
             tracks = [("Sample Track", 120)]
 
@@ -109,6 +114,12 @@ class GitMIDI(MIDIFile):
 
         self.mem_file = StringIO()
         self.__written = False
+        self.__repo_dir = repository
+        self.__repo = None
+        self.__branch = branch
+        self.branch_head = None
+
+        self.__setup_repo()
 
     def write_mem(self):
         self.writeFile(self.mem_file)
@@ -147,15 +158,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 try:
-    repo = Repo(args.repository)
+    repo_midi = GitMIDI(repository=args.repository, branch=args.branch)
+
 except InvalidGitRepositoryError:
     print("{} is not a valid Git repository".format(
         os.path.abspath(args.repository)))
 
     sys.exit(1)
 
-try:
-    branch = repo.heads[args.branch]
 except IndexError:
     print("Branch '{}' does not exist in this repo".format(args.branch))
 
@@ -166,7 +176,7 @@ orig_log = []
 if args.verbose:
     print("Generating Git log…")
 
-gen_history(orig_log, branch.commit)
+gen_history(orig_log, repo_midi.branch_head.commit)
 
 if args.verbose:
     print("Sorting commits…")
@@ -181,7 +191,6 @@ log = map(gen_note, orig_log)
 if args.verbose:
     print("Creating MIDI…")
 
-MyMIDI = GitMIDI()
 track = 0
 time = 0
 log_channel = 0
@@ -190,32 +199,32 @@ decor_channel = 1
 # Duration of one note
 duration = 0.3
 
-MyMIDI.addProgramChange(track, log_channel, 0, 104)
-MyMIDI.addProgramChange(track, decor_channel, 0, 115)
+repo_midi.addProgramChange(track, log_channel, 0, 104)
+repo_midi.addProgramChange(track, decor_channel, 0, 115)
 
 # WRITE THE SEQUENCE
 for section in log:
     section_len = len(section['file_notes']) * duration
 
     # Add a long note
-    MyMIDI.addNote(track, log_channel,
+    repo_midi.addNote(track, log_channel,
                    section['commit_note'], time,
                    section_len, section['commit_volume'])
 
     for i, file_note in enumerate(section['file_notes']):
-        MyMIDI.addNote(track, decor_channel,
+        repo_midi.addNote(track, decor_channel,
                        file_note['note'], time + i * duration,
                        duration, file_note['volume'])
 
     time += section_len
 
-MyMIDI.write_mem()
+repo_midi.write_mem()
 
 if args.file:
     if args.verbose:
         print("Saving file to {}".format(args.file))
 
-    MyMIDI.export_file(args.file)
+    repo_midi.export_file(args.file)
 
 if args.play:
     if args.verbose:
@@ -228,8 +237,8 @@ if args.play:
     # PLAYBACK
     pygame.init()
     pygame.mixer.init()
-    MyMIDI.mem_file.seek(0)
-    pygame.mixer.music.load(MyMIDI.mem_file)
+    repo_midi.mem_file.seek(0)
+    pygame.mixer.music.load(repo_midi.mem_file)
     pygame.mixer.music.play()
 
     while pygame.mixer.music.get_busy():
