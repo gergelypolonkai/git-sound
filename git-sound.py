@@ -46,13 +46,6 @@ programs = {
 program = programs['sitar-tablah']
 
 
-def sha_to_note(sha):
-    note_num = reduce(lambda res, digit: res + int(digit, 16),
-                  list(str(sha)), 0) % notecount
-
-    return notes[note_num]
-
-
 def get_file_sha(commit, file_name):
     elements = file_name.split(os.sep)
     t = commit.tree
@@ -116,15 +109,20 @@ class GitMIDI(MIDIFile):
             min(255 - deviation,
                 127 - deletions + insertions))
 
+    def sha_to_note(self, sha):
+        note_num = reduce(lambda res, digit: res + int(digit, 16),
+                          list(str(sha)), 0) % notecount
+
+        return notes[note_num]
+
     def gen_beat(self, commit):
         stat = commit.stats
-        note = sha_to_note(commit.hexsha)
 
         file_notes = []
 
         for file_name, file_stat in stat.files.items():
             file_notes.append({
-                'note': sha_to_note(get_file_sha(commit, file_name)) +
+                'note': self.sha_to_note(get_file_sha(commit, file_name)) +
                 program['file']['octave'] * 12,
                 'volume': self.gen_volume(file_stat['deletions'],
                                           file_stat['insertions'],
@@ -132,7 +130,7 @@ class GitMIDI(MIDIFile):
             })
 
         return {
-            'commit_note': sha_to_note(commit.hexsha) +
+            'commit_note': self.sha_to_note(commit.hexsha) +
             program['commit']['octave'] * 12,
             'commit_volume': self.gen_volume(stat.total['deletions'],
                                              stat.total['insertions'],
