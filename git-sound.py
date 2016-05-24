@@ -18,8 +18,6 @@ scales = {
     'a-harmonic-minor': [68, 69, 71, 72, 74, 76, 77],
     'chromatic': [60, 61, 62, 63, 64, 65, 66, 67, 68, 69],
 }
-notes = scales['a-harmonic-minor']
-notecount = len(notes)
 
 programs = {
     'sitar-tablah': {
@@ -86,7 +84,8 @@ class GitMIDI(MIDIFile):
     def __init__(self,
                  repository='.',
                  branch='master',
-                 verbose=False):
+                 verbose=False,
+                 scale=None):
 
         MIDIFile.__init__(self, 1)
 
@@ -99,6 +98,7 @@ class GitMIDI(MIDIFile):
         self.__repo_data = None
         self.git_log = []
         self.mem_file = StringIO()
+        self.__scale = scale
 
         self.__setup_midi()
         self.__setup_repo()
@@ -111,9 +111,9 @@ class GitMIDI(MIDIFile):
 
     def sha_to_note(self, sha):
         note_num = reduce(lambda res, digit: res + int(digit, 16),
-                          list(str(sha)), 0) % notecount
+                          list(str(sha)), 0) % len(self.__scale)
 
-        return notes[note_num]
+        return self.__scale[note_num]
 
     def gen_beat(self, commit):
         stat = commit.stats
@@ -226,7 +226,8 @@ if __name__ == '__main__':
 try:
     repo_midi = GitMIDI(repository=args.repository,
                         branch=args.branch,
-                        verbose=args.verbose)
+                        verbose=args.verbose,
+                        scale=scales['a-harmonic-minor'])
 
 except InvalidGitRepositoryError:
     print("{} is not a valid Git repository".format(
