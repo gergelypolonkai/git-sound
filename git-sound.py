@@ -71,7 +71,7 @@ def get_file_sha(commit, file_name):
     while True:
         try:
             t = t[elements.pop(0)]
-        except KeyError:
+        except (KeyError, IndexError):
             # The file has been deleted, return the hash of an empty file
             return 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391'
 
