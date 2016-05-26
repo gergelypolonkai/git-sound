@@ -116,8 +116,8 @@ class GitMIDI(MIDIFile):
                  branch='master',
                  verbose=False,
                  scale=None,
-                 program=None):
-
+                 program=None,
+                 volume_range=107):
         MIDIFile.__init__(self, 1)
 
         self.__verbose = verbose
@@ -131,6 +131,7 @@ class GitMIDI(MIDIFile):
         self.mem_file = StringIO()
         self.__scale = scale
         self.__program = program
+        self.__volume_deviation = min(abs(63 - volume_range), 63)
 
         self.__need_commits = self.__program['commit']['program'] is not None
         self.__need_files = self.__program['file']['program'] is not None
@@ -138,7 +139,7 @@ class GitMIDI(MIDIFile):
         self.__setup_midi()
         self.__setup_repo()
 
-    def gen_volume(self, deletions, insertions, deviation=10):
+    def gen_volume(self, deletions, insertions):
         """
         Generate a volume based on the number of modified lines
         (insertions - deletions).
@@ -148,8 +149,8 @@ class GitMIDI(MIDIFile):
         """
 
         return max(
-            deviation,
-            min(127 - deviation,
+            self.__volume_deviation,
+            min(127 - self.__volume_deviation,
                 63 - deletions + insertions))
 
     def sha_to_note(self, sha):
@@ -168,16 +169,14 @@ class GitMIDI(MIDIFile):
                 'note': self.sha_to_note(get_file_sha(commit, file_name)) +
                 self.__program['file']['octave'] * 12,
                 'volume': self.gen_volume(file_stat['deletions'],
-                                          file_stat['insertions'],
-                                          deviation=10),
+                                          file_stat['insertions']),
             })
 
         return {
             'commit_note': self.sha_to_note(commit.hexsha) +
             self.__program['commit']['octave'] * 12,
             'commit_volume': self.gen_volume(stat.total['deletions'],
-                                             stat.total['insertions'],
-                                             deviation=20),
+                                             stat.total['insertions']),
             'file_notes': file_notes,
         }
 
@@ -304,6 +303,10 @@ if __name__ == '__main__':
                         type=str,
                         default=None,
                         help="Program setting to use in the generated track")
+    parser.add_argument('--volume-range',
+                        type=int,
+                        default=100,
+                        help="The volume range to use.")
 
     args = parser.parse_args()
 
@@ -347,7 +350,8 @@ try:
                         branch=args.branch,
                         verbose=args.verbose,
                         scale=scales[args.scale],
-                        program=programs[args.program])
+                        program=programs[args.program],
+                        volume_range=args.volume_range)
 
 except InvalidGitRepositoryError:
     print("{} is not a valid Git repository".format(
