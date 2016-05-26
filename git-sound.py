@@ -267,7 +267,7 @@ class GitMIDI(MIDIFile):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Voice of a Repo')
 
-    parser.add_argument('repository', type=str)
+    parser.add_argument('repository', type=str, nargs='?', default='.')
     parser.add_argument('--branch',
                         type=str,
                         default='master',
