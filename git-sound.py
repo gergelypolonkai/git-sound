@@ -144,13 +144,13 @@ class GitMIDI(MIDIFile):
         (insertions - deletions).
 
         deviation specifies the minimum and maximum volume (minimum is
-        the value of deviation, maximum is 255 - deviation).
+        the value of deviation, maximum is 127 - deviation).
         """
 
         return max(
             deviation,
-            min(255 - deviation,
-                127 - deletions + insertions))
+            min(127 - deviation,
+                63 - deletions + insertions))
 
     def sha_to_note(self, sha):
         note_num = reduce(lambda res, digit: res + int(digit, 16),
