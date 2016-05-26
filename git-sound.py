@@ -265,7 +265,10 @@ class GitMIDI(MIDIFile):
             time += section_len
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Voice of a Repo')
+    parser = argparse.ArgumentParser(description='Voice of a Repo',
+                                     epilog='Use the special value list for ' +
+                                     'scale and program to list the ' +
+                                     'available program combinations')
 
     parser.add_argument('repository', type=str, nargs='?', default='.')
     parser.add_argument('--branch',
@@ -285,15 +288,58 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help="Print messages during execution")
+    parser.add_argument('--scale',
+                        type=str,
+                        default=None,
+                        help="Scale to use in the generated track")
+    parser.add_argument('--program',
+                        type=str,
+                        default=None,
+                        help="Program setting to use in the generated track")
 
     args = parser.parse_args()
+
+if args.scale is None and args.program != 'list':
+    print("Please specify a scale!")
+
+    sys.exit(1)
+
+if args.program is None and args.scale != 'list':
+    print("Please specify a program!")
+
+    sys.exit(1)
+
+if args.scale == 'list':
+    for scale in scales.keys():
+        print(scale)
+
+    sys.exit(0)
+
+if args.program == 'list':
+    for program in programs.keys():
+        print(program)
+
+    sys.exit(0)
+
+if args.scale not in scales:
+    print("{} is an unknown scale. Use 'list' to list the available scales." \
+          .format(args.scale))
+
+    sys.exit(1)
+
+if args.program not in programs:
+    print(("{} is an unknown program. " +
+          "Use 'list' to list the available programs.") \
+          .format(args.program))
+
+    sys.exit(1)
 
 try:
     repo_midi = GitMIDI(repository=args.repository,
                         branch=args.branch,
                         verbose=args.verbose,
-                        scale=scales['a-harmonic-minor'],
-                        program=programs['sitar-tablah'])
+                        scale=scales[args.scale],
+                        program=programs[args.program])
 
 except InvalidGitRepositoryError:
     print("{} is not a valid Git repository".format(
