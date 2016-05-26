@@ -218,6 +218,34 @@ class GitMIDI(MIDIFile):
             self.mem_file.seek(0)
             shutil.copyfileobj(self.mem_file, f)
 
+    def generate_midi(self):
+        if args.verbose:
+            print("Creating MIDI…")
+
+        track = 0
+        time = 0
+        log_channel = 0
+        decor_channel = 1
+
+        # Duration of one note
+        duration = 0.3
+
+        # WRITE THE SEQUENCE
+        for section in self.git_log:
+            section_len = len(section['file_notes']) * duration
+
+            # Add a long note
+            repo_midi.addNote(track, log_channel,
+                              section['commit_note'], time,
+                              section_len, section['commit_volume'])
+
+            for i, file_note in enumerate(section['file_notes']):
+                repo_midi.addNote(track, decor_channel,
+                                  file_note['note'], time + i * duration,
+                                  duration, file_note['volume'])
+
+            time += section_len
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Voice of a Repo')
 
@@ -261,35 +289,7 @@ except IndexError:
     sys.exit(1)
 
 repo_midi.gen_repo_data()
-log = repo_midi.git_log
-
-if args.verbose:
-    print("Creating MIDI…")
-
-track = 0
-time = 0
-log_channel = 0
-decor_channel = 1
-
-# Duration of one note
-duration = 0.3
-
-# WRITE THE SEQUENCE
-for section in log:
-    section_len = len(section['file_notes']) * duration
-
-    # Add a long note
-    repo_midi.addNote(track, log_channel,
-                   section['commit_note'], time,
-                   section_len, section['commit_volume'])
-
-    for i, file_note in enumerate(section['file_notes']):
-        repo_midi.addNote(track, decor_channel,
-                       file_note['note'], time + i * duration,
-                       duration, file_note['volume'])
-
-    time += section_len
-
+repo_midi.generate_midi()
 repo_midi.write_mem()
 
 if args.file:
