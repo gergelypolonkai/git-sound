@@ -50,6 +50,16 @@ programs = {
             'octave': -3,
         },
     },
+    'pure-violin': {
+        'commit': {
+            'program': 40,
+            'octave': 0,
+        },
+        'file': {
+            'program': None,
+            'octave': 0,
+        },
+    },
 }
 
 
