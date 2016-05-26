@@ -86,10 +86,13 @@ class GitMIDI(MIDIFile):
             # TODO: Make this configurable
             self.addTempo(0, 0, 120)
 
-            self.addProgramChange(0, self.LOG_CHANNEL,
-                                  0, self.__program['commit']['program'])
-            self.addProgramChange(0, self.FILE_CHANNEL,
-                                  0, self.__program['file']['program'])
+            if self.__need_commits:
+                self.addProgramChange(0, self.LOG_CHANNEL,
+                                      0, self.__program['commit']['program'])
+
+            if self.__need_files:
+                self.addProgramChange(0, self.FILE_CHANNEL,
+                                      0, self.__program['file']['program'])
 
     def __setup_repo(self):
         if self.__verbose:
@@ -118,6 +121,9 @@ class GitMIDI(MIDIFile):
         self.mem_file = StringIO()
         self.__scale = scale
         self.__program = program
+
+        self.__need_commits = self.__program['commit']['program'] is not None
+        self.__need_files = self.__program['file']['program'] is not None
 
         self.__setup_midi()
         self.__setup_repo()
@@ -235,14 +241,16 @@ class GitMIDI(MIDIFile):
             section_len = len(section['file_notes']) * duration
 
             # Add a long note
-            repo_midi.addNote(track, log_channel,
-                              section['commit_note'], time,
-                              section_len, section['commit_volume'])
+            if self.__need_commits:
+                repo_midi.addNote(track, log_channel,
+                                  section['commit_note'], time,
+                                  section_len, section['commit_volume'])
 
-            for i, file_note in enumerate(section['file_notes']):
-                repo_midi.addNote(track, decor_channel,
-                                  file_note['note'], time + i * duration,
-                                  duration, file_note['volume'])
+            if self.__need_files:
+                for i, file_note in enumerate(section['file_notes']):
+                    repo_midi.addNote(track, decor_channel,
+                                      file_note['note'], time + i * duration,
+                                      duration, file_note['volume'])
 
             time += section_len
 
