@@ -139,6 +139,14 @@ class GitMIDI(MIDIFile):
         self.__setup_repo()
 
     def gen_volume(self, deletions, insertions, deviation=10):
+        """
+        Generate a volume based on the number of modified lines
+        (insertions - deletions).
+
+        deviation specifies the minimum and maximum volume (minimum is
+        the value of deviation, maximum is 255 - deviation).
+        """
+
         return max(
             deviation,
             min(255 - deviation,
