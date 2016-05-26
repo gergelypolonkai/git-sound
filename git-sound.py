@@ -40,6 +40,16 @@ programs = {
             'octave': 0,
         },
     },
+    'metal': {
+        'commit': {
+            'program': 30,
+            'octave': -1,
+        },
+        'file': {
+            'program': 33,
+            'octave': -3,
+        },
+    },
 }
 
 
