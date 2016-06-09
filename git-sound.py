@@ -326,84 +326,83 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-if args.scale is None and args.program != 'list':
-    print("Please specify a scale!")
+    if args.scale is None and args.program != 'list':
+        print("Please specify a scale!")
 
-    sys.exit(1)
+        sys.exit(1)
 
-if args.program is None and args.scale != 'list':
-    print("Please specify a program!")
+    if args.program is None and args.scale != 'list':
+        print("Please specify a program!")
 
-    sys.exit(1)
+        sys.exit(1)
 
-if args.scale == 'list':
-    for scale in scales.keys():
-        print(scale)
+    if args.scale == 'list':
+        for scale in scales.keys():
+            print(scale)
 
-    sys.exit(0)
+        sys.exit(0)
 
-if args.program == 'list':
-    for program in programs.keys():
-        print(program)
+    if args.program == 'list':
+        for program in programs.keys():
+            print(program)
 
-    sys.exit(0)
+        sys.exit(0)
 
-if args.scale not in scales:
-    print("{} is an unknown scale. Use 'list' to list the available scales." \
-          .format(args.scale))
+    if args.scale not in scales:
+        print("{} is an unknown scale.".format(args.scale))
+        print("Use 'list' to list the available scales.")
 
-    sys.exit(1)
+        sys.exit(1)
 
-if args.program not in programs:
-    print(("{} is an unknown program. " +
-          "Use 'list' to list the available programs.") \
-          .format(args.program))
+    if args.program not in programs:
+        print("{} is an unknown program.".format(args.program))
+        print("Use 'list' to list the available programs.")
 
-    sys.exit(1)
+        sys.exit(1)
 
-try:
-    repo_midi = GitMIDI(repository=args.repository,
-                        branch=args.branch,
-                        verbose=args.verbose,
-                        scale=scales[args.scale],
-                        program=programs[args.program],
-                        volume_range=args.volume_range)
+    try:
+        repo_midi = GitMIDI(repository=args.repository,
+                            branch=args.branch,
+                            verbose=args.verbose,
+                            scale=scales[args.scale],
+                            program=programs[args.program],
+                            volume_range=args.volume_range)
 
-except InvalidGitRepositoryError:
-    print("{} is not a valid Git repository".format(
-        os.path.abspath(args.repository)))
+    except InvalidGitRepositoryError:
+        print("{} is not a valid Git repository" \
+              .format(os.path.abspath(args.repository)))
 
-    sys.exit(1)
+        sys.exit(1)
 
-except IndexError:
-    print("Branch '{}' does not exist in this repo".format(args.branch))
+    except IndexError:
+        print("Branch '{}' does not exist in this repo".format(args.branch))
 
-    sys.exit(1)
+        sys.exit(1)
 
-repo_midi.gen_repo_data()
-repo_midi.generate_midi()
-repo_midi.write_mem()
+    repo_midi.gen_repo_data()
+    repo_midi.generate_midi()
+    repo_midi.write_mem()
 
-if args.file:
-    if args.verbose:
-        print("Saving file to {}".format(args.file))
+    if args.file:
+        if args.verbose:
+            print("Saving file to {}".format(args.file))
 
-    repo_midi.export_file(args.file)
+        repo_midi.export_file(args.file)
 
-if args.play:
-    if args.verbose:
-        print("Playing!")
+    if args.play:
+        if args.verbose:
+            print("Playing!")
 
-    # Import pygame stuff here
-    import pygame
-    import pygame.mixer
+        # Import pygame stuff here
+        import pygame
+        import pygame.mixer
 
-    # PLAYBACK
-    pygame.init()
-    pygame.mixer.init()
-    repo_midi.mem_file.seek(0)
-    pygame.mixer.music.load(repo_midi.mem_file)
-    pygame.mixer.music.play()
+        # PLAYBACK
+        pygame.init()
+        pygame.mixer.init()
+        repo_midi.mem_file.seek(0)
+        pygame.mixer.music.load(repo_midi.mem_file)
+        pygame.mixer.music.play()
 
-    while pygame.mixer.music.get_busy():
-        sleep(1)
+        while pygame.mixer.music.get_busy():
+            sleep(1)
