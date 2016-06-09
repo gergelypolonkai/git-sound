@@ -313,6 +313,7 @@
             <property name="receives_default">True</property>
             <property name="use_stock">True</property>
             <property name="always_show_image">True</property>
+            <property name="sensitive">False</property>
             <signal name="clicked" handler="stop_midi" swapped="no"/>
           </object>
           <packing>
