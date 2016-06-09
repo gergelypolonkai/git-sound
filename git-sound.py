@@ -140,7 +140,7 @@ class GitMIDI(MIDIFile):
         self.__setup_midi()
         self.__setup_repo()
 
-    def gen_volume(self, deletions, insertions):
+    def gen_volume(self, deletions, insertions, modifier):
         """
         Generate a volume based on the number of modified lines
         (insertions - deletions).
@@ -152,7 +152,7 @@ class GitMIDI(MIDIFile):
         return max(
             self.__volume_deviation,
             min(127 - self.__volume_deviation,
-                63 - deletions + insertions))
+                63 - deletions + insertions + modifier))
 
     def sha_to_note(self, sha):
         note_num = reduce(lambda res, digit: res + int(digit, 16),
@@ -166,18 +166,22 @@ class GitMIDI(MIDIFile):
         file_notes = []
 
         for file_name, file_stat in stat.files.items():
+            volume_mod = self.__program['file'].get('volume', 0)
             file_notes.append({
                 'note': self.sha_to_note(get_file_sha(commit, file_name)) +
                 self.__program['file']['octave'] * 12,
                 'volume': self.gen_volume(file_stat['deletions'],
-                                          file_stat['insertions']),
+                                          file_stat['insertions'],
+                                          volume_mod),
             })
 
+        volume_mod = self.__program['commit'].get('volume', 0)
         return {
             'commit_note': self.sha_to_note(commit.hexsha) +
             self.__program['commit']['octave'] * 12,
             'commit_volume': self.gen_volume(stat.total['deletions'],
-                                             stat.total['insertions']),
+                                             stat.total['insertions'],
+                                             volume_mod),
             'file_notes': file_notes,
         }
 
