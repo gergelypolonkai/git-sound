@@ -43,7 +43,7 @@ programs = {
     },
     'metal': {
         'commit': {
-            'program': 30,
+            'program': 29,
             'octave': -1,
         },
         'file': {
