@@ -263,7 +263,7 @@ class GitMIDI(MIDIFile):
             shutil.copyfileobj(self.mem_file, f)
 
     def generate_midi(self):
-        if args.verbose:
+        if self.__verbose:
             print("Creating MIDI…")
 
         track = 0
@@ -280,13 +280,13 @@ class GitMIDI(MIDIFile):
 
             # Add a long note
             if self.__need_commits:
-                repo_midi.addNote(track, log_channel,
+                self.addNote(track, log_channel,
                                   section['commit_note'], time,
                                   section_len, section['commit_volume'])
 
             if self.__need_files:
                 for i, file_note in enumerate(section['file_notes']):
-                    repo_midi.addNote(track, decor_channel,
+                    self.addNote(track, decor_channel,
                                       file_note['note'], time + i * duration,
                                       duration, file_note['volume'])
 
