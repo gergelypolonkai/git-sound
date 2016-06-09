@@ -371,7 +371,8 @@ class GitMIDI(MIDIFile):
                  scale=None,
                  program=None,
                  volume_range=107,
-                 skip=0):
+                 skip=0,
+                 note_duration=0.3)
         MIDIFile.__init__(self, 1)
 
         self.__verbose = verbose
@@ -389,6 +390,7 @@ class GitMIDI(MIDIFile):
         self.__pygame_inited = False
         self.__playing = False
         self.__skip = skip
+        self.__note_duration = note_duration
 
         self.__need_commits = self.__program['commit']['program'] is not None
         self.__need_files = self.__program['file']['program'] is not None
@@ -524,16 +526,13 @@ class GitMIDI(MIDIFile):
         log_channel = 0
         decor_channel = 1
 
-        # Duration of one note
-        duration = 0.3
-
         log_length = len(self.git_log)
         current = 0
 
         # WRITE THE SEQUENCE
         for section in self.git_log:
             current += 1
-            section_len = len(section['file_notes']) * duration
+            section_len = len(section['file_notes']) * self.__note_duration
 
             if callback is not None:
                 callback(max_count=log_length, current=current)
@@ -541,14 +540,15 @@ class GitMIDI(MIDIFile):
             # Add a long note
             if self.__need_commits:
                 self.addNote(track, log_channel,
-                                  section['commit_note'], time,
-                                  section_len, section['commit_volume'])
+                             section['commit_note'], time,
+                             section_len, section['commit_volume'])
 
             if self.__need_files:
                 for i, file_note in enumerate(section['file_notes']):
                     self.addNote(track, decor_channel,
-                                      file_note['note'], time + i * duration,
-                                      duration, file_note['volume'])
+                                 file_note['note'],
+                                 time + i * self.__note_duration,
+                                 self.__note_duration, file_note['volume'])
 
             time += section_len
 
