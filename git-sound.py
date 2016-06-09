@@ -14,14 +14,15 @@ from git.objects.blob import Blob
 from git.exc import InvalidGitRepositoryError
 
 scales = {
-    'c-major': [60, 62, 64, 65, 67, 69, 71],
-    'a-harmonic-minor': [68, 69, 71, 72, 74, 76, 77],
-    'chromatic': [60, 61, 62, 63, 64, 65, 66, 67, 68, 69],
-    'pentatonic': [54, 64, 72, 81, 96, 108],
+    'c-major': ('C Major', [60, 62, 64, 65, 67, 69, 71]),
+    'a-harmonic-minor': ('A Harmonic Minor', [68, 69, 71, 72, 74, 76, 77]),
+    'chromatic': ('Chromatic', [60, 61, 62, 63, 64, 65, 66, 67, 68, 69]),
+    'pentatonic': ('Pentatonic', [54, 64, 72, 81, 96, 108]),
 }
 
 programs = {
     'sitar-tablah': {
+        'name': 'Sitar and Tablah',
         'commit': {
             'program': 104,
             'octave': -2,
@@ -32,6 +33,7 @@ programs = {
         },
     },
     'bells': {
+        'name': 'Bells',
         'commit': {
             'program': 14,
             'octave': 0,
@@ -42,6 +44,7 @@ programs = {
         },
     },
     'metal': {
+        'name': 'Metal',
         'commit': {
             'program': 29,
             'octave': -1,
@@ -52,6 +55,7 @@ programs = {
         },
     },
     'pure-violin': {
+        'name': 'Violin',
         'commit': {
             'program': 40,
             'octave': 0,
@@ -62,6 +66,7 @@ programs = {
         },
     },
     'space': {
+        'name': 'Space',
         'commit': {
             'program': 94,
             'octave': 1,
@@ -364,7 +369,7 @@ if __name__ == '__main__':
         repo_midi = GitMIDI(repository=args.repository,
                             branch=args.branch,
                             verbose=args.verbose,
-                            scale=scales[args.scale],
+                            scale=scales[args.scale][1],
                             program=programs[args.program],
                             volume_range=args.volume_range)
 
