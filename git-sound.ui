@@ -269,6 +269,7 @@
             <property name="can_focus">True</property>
             <property name="text" translatable="yes">0</property>
             <property name="adjustment">skip-adjustment</property>
+            <signal name="value-changed" handler="settings_changed" swapped="no"/>
           </object>
           <packing>
             <property name="left_attach">1</property>
@@ -297,6 +298,7 @@
             <property name="text" translatable="yes">10</property>
             <property name="adjustment">vol-adjustment</property>
             <property name="value">10</property>
+            <signal name="value-changed" handler="settings_changed" swapped="no"/>
           </object>
           <packing>
             <property name="left_attach">1</property>
