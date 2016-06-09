@@ -77,6 +77,17 @@ programs = {
             'volume': -30,
         },
     },
+    'sea-copter': {
+        'name': 'Helicopter on the shore',
+        'commit': {
+            'program': 125,
+            'octave': 0,
+        },
+        'file': {
+            'program': 122,
+            'octave': 0,
+        },
+    },
 }
 
 
