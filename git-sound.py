@@ -1,9 +1,32 @@
 #! /usr/bin/env python
 # -*- coding: utf-8
+"""
+Generate sound for Git repositories
+"""
+
+from __future__ import print_function
 
 import argparse
 import sys
 import os
+
+try:
+    import pygame
+    import pygame.mixer
+    PYGAME_AVAILABLE = True
+except ImportError:
+    PYGAME_AVAILABLE = False
+
+try:
+    import gi
+    gi.require_version('Gtk', '3.0')
+
+    from gi.repository import Gtk
+    from gi.repository import GLib
+    GTK_AVAILABLE = True
+except ImportError:
+    GTK_AVAILABLE = False
+
 
 import shutil
 
@@ -14,7 +37,7 @@ from git import Repo
 from git.objects.blob import Blob
 from git.exc import InvalidGitRepositoryError
 
-scales = {
+SCALES = {
     'c-major': ('C Major', [60, 62, 64, 65, 67, 69, 71]),
     'a-harmonic-minor': ('A Harmonic Minor', [68, 69, 71, 72, 74, 76, 77]),
     'chromatic': ('Chromatic', [60, 61, 62, 63, 64, 65, 66, 67, 68, 69]),
@@ -22,7 +45,7 @@ scales = {
     'd-major': ('D Major', [62, 64, 65, 67, 69, 71, 72]),
 }
 
-programs = {
+PROGRAMS = {
     'sitar-tablah': {
         'name': 'Sitar and Tablah',
         'commit': {
@@ -94,44 +117,88 @@ programs = {
 
 
 def get_file_sha(commit, file_name):
-    elements = file_name.split(os.sep)
-    t = commit.tree
+    """
+    Get the SHA1 ID of a file by its name, in the given commit.
+    """
 
+    elements = file_name.split(os.sep)
+    tree = commit.tree
 
     while True:
         try:
-            t = t[elements.pop(0)]
+            tree = tree[elements.pop(0)]
         except (KeyError, IndexError):
             # The file has been deleted, return the hash of an empty file
             return 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391'
 
-        if isinstance(t, Blob):
+        if isinstance(tree, Blob):
             break
 
-    return t.hexsha
+    return tree.hexsha
 
 
 class GitSoundWindow(object):
+    """
+    GIU class for git-sound.
+    """
+
     def __init__(self):
-        import gi
-        gi.require_version('Gtk', '3.0')
-
-        from gi.repository import Gtk
-        self.Gtk = Gtk
-
-        from gi.repository import GLib
-        self.GLib = GLib
-
-        self.builder = self.Gtk.Builder()
+        self.builder = Gtk.Builder()
         self.builder.add_from_file('git-sound.ui')
 
         self.win = self.builder.get_object('main-window')
         self.play_button = self.builder.get_object('play-button')
         self.stop_button = self.builder.get_object('stop-button')
+        self.vol_spin = self.builder.get_object('vol-spin')
+        self.program_combo = self.builder.get_object('program-combo')
+        self.progressbar = self.builder.get_object('generate-progress')
+        self.branch_combo = self.builder.get_object('branch-combo')
+        self.statusbar = self.builder.get_object('statusbar')
+        self.pos_label = self.builder.get_object('position-label')
+        self.skip_spin = self.builder.get_object('skip-spin')
+        self.scale_combo = self.builder.get_object('scale-combo')
+        self.chooser_button = self.builder.get_object('repo-chooser')
 
-    def read_branches(self, chooser_button):
         self.gitmidi = None
-        repo_path = chooser_button.get_file().get_path()
+
+        program_store = self.builder.get_object('program-list')
+
+        for program_id, program in PROGRAMS.items():
+            program_store.append([program['name'], program_id])
+
+        renderer = Gtk.CellRendererText()
+        self.program_combo.pack_start(renderer, True)
+        self.program_combo.add_attribute(renderer, "text", 0)
+
+        scale_store = self.builder.get_object('scale-list')
+
+        for scale_id, scale in SCALES.items():
+            scale_store.append([scale[0], scale_id])
+
+        renderer = Gtk.CellRendererText()
+        self.scale_combo.pack_start(renderer, True)
+        self.scale_combo.add_attribute(renderer, "text", 0)
+
+        self.builder.connect_signals({
+            'read_branches': lambda button: self.read_branches(),
+            'settings_changed': lambda button: self.settings_changed(),
+            'generate_repo': lambda button: self.generate_repo(),
+            'play_midi': lambda button: self.play_midi(),
+            'stop_midi': lambda button: self.stop_midi(),
+            'save_midi': lambda button: self.save_midi(),
+        })
+
+        self.win.connect("delete-event", Gtk.main_quit)
+
+    def read_branches(self):
+        """
+        Callback for the repository chooser. Upon change, this reads
+        all the branches from the selected repository.
+        """
+
+        # Make sure the Play, Stop and Save buttons are disabled
+        self.gitmidi = None
+        repo_path = self.chooser_button.get_file().get_path()
         self.branch_combo.remove_all()
         self.branch_combo.set_button_sensitivity(False)
         self.set_buttons_sensitivity(disable_all=True)
@@ -139,11 +206,11 @@ class GitSoundWindow(object):
         try:
             repo = Repo(repo_path)
         except InvalidGitRepositoryError:
-            dialog = self.Gtk.MessageDialog(
-                chooser_button.get_toplevel(),
-                self.Gtk.DialogFlags.MODAL,
-                self.Gtk.MessageType.ERROR,
-                self.Gtk.ButtonsType.OK,
+            dialog = Gtk.MessageDialog(
+                self.chooser_button.get_toplevel(),
+                Gtk.DialogFlags.MODAL,
+                Gtk.MessageType.ERROR,
+                Gtk.ButtonsType.OK,
                 "{} is not a valid Git repository".format(
                     repo_path))
 
@@ -160,16 +227,31 @@ class GitSoundWindow(object):
             self.branch_combo.append_text(head.name)
 
     def set_status(self, text):
+        """
+        Change the status bar text.
+        """
+
         self.statusbar.push(self.statusbar.get_context_id("git-sound"), text)
 
-    def settings_changed(self, button):
+    def settings_changed(self):
+        """
+        Callback to use if anything MIDI-related is changed
+        (repository, branch, scale or program).
+        """
+
         self.gitmidi = None
         self.set_buttons_sensitivity()
         self.stop_midi()
 
     def set_buttons_sensitivity(self, disable_all=False):
+        """
+        Set buttons sensitivity based on different conditions.
+
+        It checks if a repository and a branch is selected or if MIDI
+        data is already generated.
+        """
+
         generate_button = self.builder.get_object('generate-button')
-        stop_button = self.builder.get_object('stop-button')
         save_button = self.builder.get_object('save-button')
 
         if disable_all:
@@ -198,9 +280,12 @@ class GitSoundWindow(object):
             self.stop_button.set_sensitive(False)
             save_button.set_sensitive(False)
 
-    def generate_repo(self, button):
-        chooser_button = self.builder.get_object('repo-chooser')
-        repo_path = chooser_button.get_file().get_path()
+    def generate_repo(self):
+        """
+        Generate repository data for MIDI data.
+        """
+
+        repo_path = self.chooser_button.get_file().get_path()
         branch_selected = self.branch_combo.get_active_text()
         program_selected = self.program_combo.get_active_id()
         scale_selected = self.scale_combo.get_active_id()
@@ -213,8 +298,8 @@ class GitSoundWindow(object):
         self.gitmidi = GitMIDI(repository=repo_path,
                                branch=branch_selected,
                                verbose=False,
-                               scale=scales[scale_selected][1],
-                               program=programs[program_selected],
+                               scale=SCALES[scale_selected][1],
+                               program=PROGRAMS[program_selected],
                                volume_range=vol_deviation,
                                skip=skip)
 
@@ -225,15 +310,24 @@ class GitSoundWindow(object):
         self.set_buttons_sensitivity(disable_all=False)
 
     def genrepo_cb(self, max_count=None, current=None):
+        """
+        Generate repository data. This is called when the user presses
+        the Generate button.
+        """
+
         if max_count is None or current is None:
             self.progressbar.pulse()
         else:
             self.progressbar.set_fraction(current / max_count)
 
         # Make sure the progress bar gets updated
-        self.Gtk.main_iteration_do(False)
+        Gtk.main_iteration_do(False)
 
     def update_play_pos(self):
+        """
+        Update playback position label.
+        """
+
         if self.gitmidi is None:
             return
 
@@ -257,88 +351,73 @@ class GitSoundWindow(object):
         return True
 
     def play_midi(self):
+        """
+        Start MIDI playback.
+        """
+
         self.set_status(u"Playing…")
         self.gitmidi.play(track=True)
-        self.GLib.timeout_add_seconds(1, self.update_play_pos)
+        GLib.timeout_add_seconds(1, self.update_play_pos)
         self.play_button.set_sensitive(False)
         self.stop_button.set_sensitive(True)
 
     def stop_midi(self):
+        """
+        Stop MIDI playback.
+        """
+
         if self.gitmidi is not None:
             self.gitmidi.stop()
 
     def __save(self, dialog, response_id):
-        if response_id == self.Gtk.ResponseType.OK:
+        """
+        Do the actual MIDI saving after the user chose a file.
+        """
+
+        if response_id == Gtk.ResponseType.OK:
             save_file = dialog.get_file().get_path()
             dialog.destroy()
             self.gitmidi.export_file(save_file)
 
     def save_midi(self):
-        dialog = self.Gtk.FileChooserDialog(
+        """
+        Save MIDI data.
+        """
+
+        dialog = Gtk.FileChooserDialog(
             u"Save As…",
             self.win,
-            self.Gtk.FileChooserAction.SAVE,
-            ("Save", self.Gtk.ResponseType.OK))
+            Gtk.FileChooserAction.SAVE,
+            ("Save", Gtk.ResponseType.OK))
         dialog.set_do_overwrite_confirmation(True)
 
         dialog.connect('response', self.__save)
         dialog.run()
 
     def start(self):
-        program_store = self.builder.get_object('program-list')
-        self.program_combo = self.builder.get_object('program-combo')
+        """
+        Start the GUI.
+        """
 
-        for program_id, program in programs.items():
-            program_store.append([program['name'], program_id])
-
-        renderer = self.Gtk.CellRendererText()
-        self.program_combo.pack_start(renderer, True)
-        self.program_combo.add_attribute(renderer, "text", 0)
-
-        scale_store = self.builder.get_object('scale-list')
-        self.scale_combo = self.builder.get_object('scale-combo')
-
-        for scale_id, scale in scales.items():
-            scale_store.append([scale[0], scale_id])
-
-        renderer = self.Gtk.CellRendererText()
-        self.scale_combo.pack_start(renderer, True)
-        self.scale_combo.add_attribute(renderer, "text", 0)
-
-        self.branch_combo = self.builder.get_object('branch-combo')
-        self.statusbar = self.builder.get_object('statusbar')
-        self.pos_label = self.builder.get_object('position-label')
-        self.skip_spin = self.builder.get_object('skip-spin')
-        self.vol_spin = self.builder.get_object('vol-spin')
-
-        self.builder.connect_signals({
-            'read_branches': lambda button: self.read_branches(button),
-            'settings_changed': lambda button: self.settings_changed(button),
-            'generate_repo': lambda button: self.generate_repo(button),
-            'play_midi': lambda button: self.play_midi(),
-            'stop_midi': lambda button: self.stop_midi(),
-            'save_midi': lambda button: self.save_midi(),
-        })
-
-        self.progressbar = self.builder.get_object('generate-progress')
-
-        self.win.connect("delete-event", self.Gtk.main_quit)
         self.win.show_all()
-        self.Gtk.main()
+        Gtk.main()
 
         sys.exit(0)
 
 
-def start_gui():
-    win = GitSoundWindow()
-    win.start()
-
-
 class GitMIDI(MIDIFile):
+    """
+    Class to hold repository data, and MIDI data based on that repository.
+    """
+
     LOG_CHANNEL = 0
     FILE_CHANNEL = 1
 
     def __setup_midi(self, track_title=None):
+        """
+        Initialise the MIDI file.
+        """
+
         if self.__verbose:
             print("Preparing MIDI track…")
 
@@ -346,8 +425,7 @@ class GitMIDI(MIDIFile):
             # TODO: Change this to something that connects to the repo
             self.addTrackName(0, 0, "Sample Track")
 
-            # TODO: Make this configurable
-            self.addTempo(0, 0, 120)
+            self.addTempo(0, 0, self.__tempo)
 
             if self.__need_commits:
                 self.addProgramChange(0, self.LOG_CHANNEL,
@@ -358,32 +436,38 @@ class GitMIDI(MIDIFile):
                                       0, self.__program['file']['program'])
 
     def __setup_repo(self):
+        """
+        Setup repository and get the specified branch.
+        """
+
         if self.__verbose:
             print("Analyzing repository…")
 
         repo = Repo(self.__repo_dir)
-        self.branch_head = repo.heads[self.__branch].commit
+        self.__branch_head = repo.heads[self.__branch].commit
 
     def __init__(self,
-                 repository='.',
-                 branch='master',
+                 repository=None,
+                 branch=None,
                  verbose=False,
                  scale=None,
                  program=None,
                  volume_range=107,
                  skip=0,
-                 note_duration=0.3)
+                 note_duration=0.3,
+                 max_beat_len=None,
+                 tempo=120):
         MIDIFile.__init__(self, 1)
 
         self.__verbose = verbose
         self.__written = False
-        self.__repo_dir = repository
+        self.__repo_dir = repository or '.'
         self.__repo = None
-        self.__branch = branch
-        self.branch_head = None
+        self.__branch = branch or 'master'
+        self.__branch_head = None
         self.__repo_data = None
-        self.git_log = []
-        self.mem_file = StringIO()
+        self.__git_log = []
+        self.__mem_file = StringIO()
         self.__scale = scale
         self.__program = program
         self.__volume_deviation = min(abs(63 - volume_range), 63)
@@ -391,6 +475,8 @@ class GitMIDI(MIDIFile):
         self.__playing = False
         self.__skip = skip
         self.__note_duration = note_duration
+        self.__max_beat_len = max_beat_len or 0.3
+        self.__tempo = tempo
 
         self.__need_commits = self.__program['commit']['program'] is not None
         self.__need_files = self.__program['file']['program'] is not None
@@ -413,12 +499,20 @@ class GitMIDI(MIDIFile):
                 63 - deletions + insertions + modifier))
 
     def sha_to_note(self, sha):
+        """
+        Calculate note based on an SHA1 hash
+        """
+
         note_num = reduce(lambda res, digit: res + int(digit, 16),
                           list(str(sha)), 0) % len(self.__scale)
 
         return self.__scale[note_num]
 
     def gen_beat(self, commit, callback=None):
+        """
+        Generate data for a beat based on a commit and its files.
+        """
+
         stat = commit.stats
 
         file_notes = []
@@ -428,12 +522,15 @@ class GitMIDI(MIDIFile):
                 callback(max_count=None, current=None)
 
             volume_mod = self.__program['file'].get('volume', 0)
-            file_notes.append({
-                'note': self.sha_to_note(get_file_sha(commit, file_name)) +
-                self.__program['file']['octave'] * 12,
-                'volume': self.gen_volume(file_stat['deletions'],
+            file_note = self.sha_to_note(get_file_sha(commit, file_name)) + \
+                        self.__program['file']['octave'] * 12
+            file_volume = self.gen_volume(file_stat['deletions'],
                                           file_stat['insertions'],
-                                          volume_mod),
+                                          volume_mod)
+
+            file_notes.append({
+                'note': file_note,
+                'volume': file_volume,
             })
 
         if callback is not None:
@@ -443,7 +540,7 @@ class GitMIDI(MIDIFile):
 
         return {
             'commit_note': self.sha_to_note(commit.hexsha) +
-            self.__program['commit']['octave'] * 12,
+                           self.__program['commit']['octave'] * 12,
             'commit_volume': self.gen_volume(stat.total['deletions'],
                                              stat.total['insertions'],
                                              volume_mod),
@@ -465,7 +562,7 @@ class GitMIDI(MIDIFile):
 
         self.__repo_data = []
         counter = 0
-        to_process = [self.branch_head]
+        to_process = [self.__branch_head]
 
         while len(to_process) > 0:
             counter += 1
@@ -474,14 +571,14 @@ class GitMIDI(MIDIFile):
             if counter % 500 == 0 and self.__verbose:
                 print("Done with {} commits".format(counter))
 
-            commit = to_process.pop()
+            current_commit = to_process.pop()
 
             if callback is not None:
                 callback(max_count=None, current=None)
 
-            if not commit in self.__repo_data:
-                self.__repo_data.append(commit)
-                to_process += commit.parents
+            if current_commit not in self.__repo_data:
+                self.__repo_data.append(current_commit)
+                to_process += current_commit.parents
 
         if self.__verbose:
             print("{} commits found".format(counter))
@@ -492,32 +589,45 @@ class GitMIDI(MIDIFile):
         if self.__verbose:
             print("Generating MIDI data…")
 
-        self.git_log = map(
-            lambda commit: self.gen_beat(
-                commit,
-                callback=callback),
-            self.__repo_data[self.__skip:])
+        self.__git_log = [self.gen_beat(commit, callback=callback)
+                          for commit in self.__repo_data[self.__skip:]]
 
     @property
     def repo_data(self):
+        """
+        Get repository data for MIDI generation.
+        """
+
         if self.__repo_data is None:
             self.gen_repo_data(force=True)
 
         return self.__repo_data
 
     def write_mem(self):
-        self.writeFile(self.mem_file)
+        """
+        Write MIDI data to the memory file.
+        """
+
+        self.writeFile(self.__mem_file)
         self.__written = True
 
     def export_file(self, filename):
+        """
+        Export MIDI data to a file.
+        """
+
         if not self.__written:
             self.write_mem()
 
-        with open(filename, 'w') as f:
-            self.mem_file.seek(0)
-            shutil.copyfileobj(self.mem_file, f)
+        with open(filename, 'w') as midi_file:
+            self.__mem_file.seek(0)
+            shutil.copyfileobj(self.__mem_file, midi_file)
 
     def generate_midi(self, callback=None):
+        """
+        Generate MIDI data.
+        """
+
         if self.__verbose:
             print("Creating MIDI…")
 
@@ -526,11 +636,11 @@ class GitMIDI(MIDIFile):
         log_channel = 0
         decor_channel = 1
 
-        log_length = len(self.git_log)
+        log_length = len(self.__git_log)
         current = 0
 
         # WRITE THE SEQUENCE
-        for section in self.git_log:
+        for section in self.__git_log:
             current += 1
             section_len = len(section['file_notes']) * self.__note_duration
 
@@ -553,52 +663,72 @@ class GitMIDI(MIDIFile):
             time += section_len
 
     def __init_pygame(self):
-        if self.__pygame_inited:
+        """
+        Initialise pygame.
+        """
+
+        if not PYGAME_AVAILABLE or self.__pygame_inited:
             return
 
-        # Import pygame stuff here
-        import pygame
-        import pygame.mixer
-
-        self.pygame = pygame
-        self.mixer = pygame.mixer
-
-        # PLAYBACK
+        # Initialise pygame
         pygame.init()
         pygame.mixer.init()
 
     def play(self, track=False):
+        """
+        Start MIDI playback. If pygame is not available, don’t do anything.
+        """
+
+        if not PYGAME_AVAILABLE:
+            return "pygame is not available, cannot start playback"
+
         if self.__verbose:
             print("Playing!")
 
         self.__init_pygame()
 
-        self.mem_file.seek(0)
-        self.mixer.music.load(self.mem_file)
-        self.mixer.music.play()
+        self.__mem_file.seek(0)
+        pygame.mixer.music.load(self.__mem_file)
+        pygame.mixer.music.play()
         self.__playing = True
 
         if not track:
-            while self.mixer.music.get_busy():
+            while pygame.mixer.music.get_busy():
                 sleep(1)
 
             self.__playing = False
 
     def stop(self):
-        self.mixer.music.stop()
+        """
+        Stop MIDI playback.
+        """
+
+        if not PYGAME_AVAILABLE:
+            return
+
+        pygame.mixer.music.stop()
 
     def get_play_pos(self):
+        """
+        Get current playback position from the mixer
+        """
+
         if not self.__playing:
             return None
 
-        if self.mixer.music.get_busy():
-            return self.mixer.music.get_pos()
+        if pygame.mixer.music.get_busy():
+            return pygame.mixer.music.get_pos()
         else:
             self.__playing = False
 
             return None
 
-if __name__ == '__main__':
+
+def main():
+    """
+    Main function, used if we are not imported.
+    """
+
     parser = argparse.ArgumentParser(description='Voice of a Repo',
                                      epilog='Use the special value list for ' +
                                      'scale and program to list the ' +
@@ -644,8 +774,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.scale is None and args.program is None:
-        start_gui()
+    if args.scale is None and args.program is None and GTK_AVAILABLE:
+        GitSoundWindow().start()
+
+        sys.exit(0)
 
     if args.scale is None and args.program != 'list':
         print("Please specify a scale!")
@@ -658,24 +790,24 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if args.scale == 'list':
-        for scale in scales.keys():
+        for scale in SCALES.keys():
             print(scale)
 
         sys.exit(0)
 
     if args.program == 'list':
-        for program in programs.keys():
+        for program in PROGRAMS.keys():
             print(program)
 
         sys.exit(0)
 
-    if args.scale not in scales:
+    if args.scale not in SCALES:
         print("{} is an unknown scale.".format(args.scale))
         print("Use 'list' to list the available scales.")
 
         sys.exit(1)
 
-    if args.program not in programs:
+    if args.program not in PROGRAMS:
         print("{} is an unknown program.".format(args.program))
         print("Use 'list' to list the available programs.")
 
@@ -685,13 +817,13 @@ if __name__ == '__main__':
         repo_midi = GitMIDI(repository=args.repository,
                             branch=args.branch,
                             verbose=args.verbose,
-                            scale=scales[args.scale][1],
-                            program=programs[args.program],
+                            scale=SCALES[args.scale][1],
+                            program=PROGRAMS[args.program],
                             volume_range=args.volume_range,
                             skip=args.skip)
 
     except InvalidGitRepositoryError:
-        print("{} is not a valid Git repository" \
+        print("{} is not a valid Git repository"
               .format(os.path.abspath(args.repository)))
 
         sys.exit(1)
@@ -713,3 +845,6 @@ if __name__ == '__main__':
 
     if args.play:
         repo_midi.play()
+
+if __name__ == '__main__':
+    main()
