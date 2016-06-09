@@ -18,6 +18,7 @@ scales = {
     'a-harmonic-minor': ('A Harmonic Minor', [68, 69, 71, 72, 74, 76, 77]),
     'chromatic': ('Chromatic', [60, 61, 62, 63, 64, 65, 66, 67, 68, 69]),
     'pentatonic': ('Pentatonic', [54, 64, 72, 81, 96, 108]),
+    'd-major': ('D Major', [62, 64, 65, 67, 69, 71, 72]),
 }
 
 programs = {
