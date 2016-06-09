@@ -452,17 +452,17 @@ class GitMIDI(MIDIFile):
     def __init__(self,
                  repository=None,
                  branch=None,
-                 verbose=False,
+                 verbose=None,
                  scale=None,
                  program=None,
-                 volume_range=107,
-                 skip=0,
-                 note_duration=0.3,
+                 volume_range=None,
+                 skip=None,
+                 note_duration=None,
                  max_beat_len=None,
-                 tempo=120):
+                 tempo=None):
         MIDIFile.__init__(self, 1)
 
-        self.__verbose = verbose
+        self.__verbose = verbose or False
         self.__written = False
         self.__repo_dir = repository or '.'
         self.__repo = None
@@ -473,13 +473,13 @@ class GitMIDI(MIDIFile):
         self.__mem_file = StringIO()
         self.__scale = scale
         self.__program = program
-        self.__volume_deviation = min(abs(63 - volume_range), 63)
+        self.__volume_deviation = min(abs(63 - (volume_range or 107)), 63)
         self.__pygame_inited = False
         self.__playing = False
-        self.__skip = skip
-        self.__note_duration = note_duration
-        self.__max_beat_len = max_beat_len or 0.3
-        self.__tempo = tempo
+        self.__skip = skip or 0
+        self.__note_duration = note_duration or 0.3
+        self.__max_beat_len = max_beat_len or 10
+        self.__tempo = tempo or 120
 
         self.__need_commits = self.__program['commit']['program'] is not None
         self.__need_files = self.__program['file']['program'] is not None
@@ -519,8 +519,14 @@ class GitMIDI(MIDIFile):
         stat = commit.stats
 
         file_notes = []
+        file_count = 0
 
         for file_name, file_stat in stat.files.items():
+            file_count += 1
+
+            if file_count > self.__max_beat_len:
+                break
+
             if callback is not None:
                 callback(max_count=None, current=None)
 
@@ -541,12 +547,15 @@ class GitMIDI(MIDIFile):
 
         volume_mod = self.__program['commit'].get('volume', 0)
 
+        commit_note = self.sha_to_note(commit.hexsha) + \
+                      self.__program['commit']['octave'] * 12
+        commit_volume = self.gen_volume(stat.total['deletions'],
+                                        stat.total['insertions'],
+                                        volume_mod)
+
         return {
-            'commit_note': self.sha_to_note(commit.hexsha) +
-                           self.__program['commit']['octave'] * 12,
-            'commit_volume': self.gen_volume(stat.total['deletions'],
-                                             stat.total['insertions'],
-                                             volume_mod),
+            'commit_note': commit_note,
+            'commit_volume': commit_volume,
             'file_notes': file_notes,
         }
 
