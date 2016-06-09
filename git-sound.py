@@ -149,6 +149,8 @@ class GitMIDI(MIDIFile):
         self.__scale = scale
         self.__program = program
         self.__volume_deviation = min(abs(63 - volume_range), 63)
+        self.__pygame_inited = False
+        self.__playing = False
 
         self.__need_commits = self.__program['commit']['program'] is not None
         self.__need_files = self.__program['file']['program'] is not None
@@ -292,6 +294,49 @@ class GitMIDI(MIDIFile):
 
             time += section_len
 
+    def __init_pygame(self):
+        if self.__pygame_inited:
+            return
+
+        # Import pygame stuff here
+        import pygame
+        import pygame.mixer
+
+        self.pygame = pygame
+        self.mixer = pygame.mixer
+
+        # PLAYBACK
+        pygame.init()
+        pygame.mixer.init()
+
+    def play(self, track=False):
+        if self.__verbose:
+            print("Playing!")
+
+        self.__init_pygame()
+
+        self.mem_file.seek(0)
+        self.mixer.music.load(self.mem_file)
+        self.mixer.music.play()
+        self.__playing = True
+
+        if track:
+            while self.mixer.music.get_busy():
+                sleep(1)
+
+            self.__playing = False
+
+    def get_play_pos(self):
+        if not self.__playing:
+            return None
+
+        if self.mixer.music.get_busy():
+            return self.mixer.music.get_pos()
+        else:
+            self.__playing = False
+
+            return None
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Voice of a Repo',
                                      epilog='Use the special value list for ' +
@@ -395,19 +440,4 @@ if __name__ == '__main__':
         repo_midi.export_file(args.file)
 
     if args.play:
-        if args.verbose:
-            print("Playing!")
-
-        # Import pygame stuff here
-        import pygame
-        import pygame.mixer
-
-        # PLAYBACK
-        pygame.init()
-        pygame.mixer.init()
-        repo_midi.mem_file.seek(0)
-        pygame.mixer.music.load(repo_midi.mem_file)
-        pygame.mixer.music.play()
-
-        while pygame.mixer.music.get_busy():
-            sleep(1)
+        repo_midi.play()
