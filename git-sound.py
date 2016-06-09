@@ -110,6 +110,208 @@ def get_file_sha(commit, file_name):
     return t.hexsha
 
 
+class GitSoundWindow(object):
+    def __init__(self):
+        import gi
+        gi.require_version('Gtk', '3.0')
+
+        from gi.repository import Gtk
+        self.Gtk = Gtk
+
+        from gi.repository import GLib
+        self.GLib = GLib
+
+        self.builder = self.Gtk.Builder()
+        self.builder.add_from_file('git-sound.ui')
+
+        self.play_button = self.builder.get_object('play-button')
+        self.stop_button = self.builder.get_object('stop-button')
+
+    def read_branches(self, chooser_button):
+        self.gitmidi = None
+        repo_path = chooser_button.get_file().get_path()
+        self.branch_combo.remove_all()
+        self.branch_combo.set_button_sensitivity(False)
+        self.set_buttons_sensitivity(disable_all=True)
+
+        try:
+            repo = Repo(repo_path)
+        except InvalidGitRepositoryError:
+            dialog = self.Gtk.MessageDialog(
+                chooser_button.get_toplevel(),
+                self.Gtk.DialogFlags.MODAL,
+                self.Gtk.MessageType.ERROR,
+                self.Gtk.ButtonsType.OK,
+                "{} is not a valid Git repository".format(
+                    repo_path))
+
+            dialog.connect('response',
+                           lambda dialog, response_id: dialog.destroy())
+            dialog.run()
+
+            return
+
+        self.set_status('Opened repository: {}'.format(repo_path))
+        self.branch_combo.set_button_sensitivity(True)
+
+        for head in repo.heads:
+            self.branch_combo.append_text(head.name)
+
+    def set_status(self, text):
+        self.statusbar.push(self.statusbar.get_context_id("git-sound"), text)
+
+    def settings_changed(self, button):
+        self.gitmidi = None
+        self.set_buttons_sensitivity()
+        self.stop_midi()
+
+    def set_buttons_sensitivity(self, disable_all=False):
+        generate_button = self.builder.get_object('generate-button')
+        stop_button = self.builder.get_object('stop-button')
+        save_button = self.builder.get_object('save-button')
+
+        if disable_all:
+            generate_button.set_sensitive(False)
+            self.play_button.set_sensitive(False)
+            self.stop_button.set_sensitive(False)
+            save_button.set_sensitive(False)
+
+            return
+
+        if self.gitmidi is not None:
+            generate_button.set_sensitive(False)
+            self.play_button.set_sensitive(True)
+            self.stop_button.set_sensitive(False)
+            save_button.set_sensitive(True)
+
+            return
+
+        branch_selected = self.branch_combo.get_active_text() is not None
+        program_selected = self.program_combo.get_active_id() is not None
+        scale_selected = self.scale_combo.get_active_id() is not None
+
+        if branch_selected and program_selected and scale_selected:
+            generate_button.set_sensitive(True)
+            self.play_button.set_sensitive(False)
+            self.stop_button.set_sensitive(False)
+            save_button.set_sensitive(False)
+
+    def generate_repo(self, button):
+        chooser_button = self.builder.get_object('repo-chooser')
+        repo_path = chooser_button.get_file().get_path()
+        branch_selected = self.branch_combo.get_active_text()
+        program_selected = self.program_combo.get_active_id()
+        scale_selected = self.scale_combo.get_active_id()
+        skip = int(self.skip_spin.get_value())
+        vol_deviation = int(self.vol_spin.get_value())
+
+        self.set_status("Generating data")
+        self.progressbar.set_fraction(0.0)
+        self.progressbar.pulse()
+        self.gitmidi = GitMIDI(repository=repo_path,
+                               branch=branch_selected,
+                               verbose=False,
+                               scale=scales[scale_selected][1],
+                               program=programs[program_selected],
+                               volume_range=vol_deviation,
+                               skip=skip)
+
+        self.gitmidi.gen_repo_data(callback=self.genrepo_cb)
+        self.gitmidi.generate_midi(callback=self.genrepo_cb)
+        self.gitmidi.write_mem()
+
+        self.set_buttons_sensitivity(disable_all=False)
+
+    def genrepo_cb(self, max_count=None, current=None):
+        if max_count is None or current is None:
+            self.progressbar.pulse()
+        else:
+            self.progressbar.set_fraction(current / max_count)
+
+        # Make sure the progress bar gets updated
+        self.Gtk.main_iteration_do(False)
+
+    def update_play_pos(self):
+        position = self.gitmidi.get_play_pos()
+
+        if position is None:
+            self.set_status("Stopped")
+            self.pos_label.set_text("0:00")
+            self.play_button.set_sensitive(True)
+            self.stop_button.set_sensitive(False)
+
+            return False
+
+        position = int(position / 1000)
+
+        minutes = int(position / 60)
+        seconds = position - (minutes * 60)
+
+        self.pos_label.set_text("{}:{:02}".format(minutes, seconds))
+
+        return True
+
+    def play_midi(self):
+        self.set_status(u"Playing…")
+        self.gitmidi.play(track=True)
+        self.GLib.timeout_add_seconds(1, self.update_play_pos)
+        self.play_button.set_sensitive(False)
+        self.stop_button.set_sensitive(True)
+
+    def stop_midi(self):
+        if self.gitmidi is not None:
+            self.gitmidi.stop()
+
+    def start(self):
+        program_store = self.builder.get_object('program-list')
+        self.program_combo = self.builder.get_object('program-combo')
+
+        for program_id, program in programs.items():
+            program_store.append([program['name'], program_id])
+
+        renderer = self.Gtk.CellRendererText()
+        self.program_combo.pack_start(renderer, True)
+        self.program_combo.add_attribute(renderer, "text", 0)
+
+        scale_store = self.builder.get_object('scale-list')
+        self.scale_combo = self.builder.get_object('scale-combo')
+
+        for scale_id, scale in scales.items():
+            scale_store.append([scale[0], scale_id])
+
+        renderer = self.Gtk.CellRendererText()
+        self.scale_combo.pack_start(renderer, True)
+        self.scale_combo.add_attribute(renderer, "text", 0)
+
+        self.branch_combo = self.builder.get_object('branch-combo')
+        self.statusbar = self.builder.get_object('statusbar')
+        self.pos_label = self.builder.get_object('position-label')
+        self.skip_spin = self.builder.get_object('skip-spin')
+        self.vol_spin = self.builder.get_object('vol-spin')
+
+        self.builder.connect_signals({
+            'read_branches': lambda button: self.read_branches(button),
+            'settings_changed': lambda button: self.settings_changed(button),
+            'generate_repo': lambda button: self.generate_repo(button),
+            'play_midi': lambda button: self.play_midi(),
+            'stop_midi': lambda button: self.stop_midi(),
+        })
+
+        self.progressbar = self.builder.get_object('generate-progress')
+
+        win = self.builder.get_object('main-window')
+        win.connect("delete-event", self.Gtk.main_quit)
+        win.show_all()
+        self.Gtk.main()
+
+        sys.exit(0)
+
+
+def start_gui():
+    win = GitSoundWindow()
+    win.start()
+
+
 class GitMIDI(MIDIFile):
     LOG_CHANNEL = 0
     FILE_CHANNEL = 1
@@ -419,6 +621,9 @@ if __name__ == '__main__':
                         "with some huge commits)")
 
     args = parser.parse_args()
+
+    if args.scale is None and args.program is None:
+        start_gui()
 
     if args.scale is None and args.program != 'list':
         print("Please specify a scale!")
