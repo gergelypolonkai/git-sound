@@ -296,9 +296,9 @@ class GitSoundWindow(object):
         notelen = self.notelen_spin.get_value()
         beatlen = int(self.beatlen_spin.get_value()) or None
 
-        self.set_status("Generating data")
         self.progressbar.set_fraction(0.0)
         self.progressbar.pulse()
+        self.set_status("Reading commits")
         self.gitmidi = GitMIDI(repository=repo_path,
                                branch=branch_selected,
                                verbose=False,
@@ -309,24 +309,29 @@ class GitSoundWindow(object):
                                note_duration=notelen,
                                max_beat_len=beatlen)
 
+        self.set_status("Generating beats")
         self.gitmidi.gen_repo_data(callback=self.genrepo_cb)
+        self.set_status("Generating MIDI")
         self.gitmidi.generate_midi(callback=self.genrepo_cb)
         self.gitmidi.write_mem()
 
         self.set_buttons_sensitivity(disable_all=False)
 
-    def genrepo_cb(self, max_count=None, current=None):
+    def genrepo_cb(self, max_count, current):
         """
         Generate repository data. This is called when the user presses
         the Generate button.
         """
 
+
         if max_count is None or current is None:
             self.progressbar.pulse()
         else:
-            self.progressbar.set_fraction(current / max_count)
+            fraction = float(current) / float(max_count)
+            self.progressbar.set_fraction(fraction)
 
         # Make sure the progress bar gets updated
+        Gtk.main_iteration_do(False)
         Gtk.main_iteration_do(False)
 
     def update_play_pos(self):
@@ -514,7 +519,7 @@ class GitMIDI(MIDIFile):
 
         return self.__scale[note_num]
 
-    def gen_beat(self, commit, callback=None):
+    def gen_beat(self, commit):
         """
         Generate data for a beat based on a commit and its files.
         """
@@ -530,9 +535,6 @@ class GitMIDI(MIDIFile):
             if file_count > self.__max_beat_len:
                 break
 
-            if callback is not None:
-                callback(max_count=None, current=None)
-
             volume_mod = self.__program['file'].get('volume', 0)
             file_note = self.sha_to_note(get_file_sha(commit, file_name)) + \
                         self.__program['file']['octave'] * 12
@@ -544,9 +546,6 @@ class GitMIDI(MIDIFile):
                 'note': file_note,
                 'volume': file_volume,
             })
-
-        if callback is not None:
-            callback(max_count=None, current=None)
 
         volume_mod = self.__program['commit'].get('volume', 0)
 
@@ -589,7 +588,7 @@ class GitMIDI(MIDIFile):
             current_commit = to_process.pop()
 
             if callback is not None:
-                callback(max_count=None, current=None)
+                callback(None, None)
 
             if current_commit not in self.__repo_data:
                 self.__repo_data.append(current_commit)
@@ -604,8 +603,17 @@ class GitMIDI(MIDIFile):
         if self.__verbose:
             print("Generating MIDI data…")
 
-        self.__git_log = [self.gen_beat(commit, callback=callback)
-                          for commit in self.__repo_data[self.__skip:]]
+        self.__git_log = []
+        current_commit = 0
+        commits_to_process = self.__repo_data[self.__skip:]
+        commit_count = len(commits_to_process)
+
+        for commit in commits_to_process:
+            if callback:
+                current_commit += 1
+                callback(commit_count, current_commit)
+
+            self.__git_log.append(self.gen_beat(commit))
 
     @property
     def repo_data(self):
@@ -660,7 +668,7 @@ class GitMIDI(MIDIFile):
             section_len = len(section['file_notes']) * self.__note_duration
 
             if callback is not None:
-                callback(max_count=log_length, current=current)
+                callback(log_length, current)
 
             # Add a long note
             if self.__need_commits:
