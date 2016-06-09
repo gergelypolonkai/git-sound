@@ -61,6 +61,17 @@ programs = {
             'octave': 0,
         },
     },
+    'space': {
+        'commit': {
+            'program': 94,
+            'octave': 1,
+        },
+        'file': {
+            'program': 80,
+            'octave': 1,
+            'volume': -30,
+        },
+    },
 }
 
 
