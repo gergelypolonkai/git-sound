@@ -134,7 +134,8 @@ class GitMIDI(MIDIFile):
                  verbose=False,
                  scale=None,
                  program=None,
-                 volume_range=107):
+                 volume_range=107,
+                 skip=0):
         MIDIFile.__init__(self, 1)
 
         self.__verbose = verbose
@@ -151,6 +152,7 @@ class GitMIDI(MIDIFile):
         self.__volume_deviation = min(abs(63 - volume_range), 63)
         self.__pygame_inited = False
         self.__playing = False
+        self.__skip = skip
 
         self.__need_commits = self.__program['commit']['program'] is not None
         self.__need_files = self.__program['file']['program'] is not None
@@ -243,7 +245,7 @@ class GitMIDI(MIDIFile):
             print("Generating MIDI data…")
 
         self.git_log = map(lambda commit: self.gen_beat(commit),
-                           self.__repo_data)
+                           self.__repo_data[self.__skip:])
 
     @property
     def repo_data(self):
@@ -320,7 +322,7 @@ class GitMIDI(MIDIFile):
         self.mixer.music.play()
         self.__playing = True
 
-        if track:
+        if not track:
             while self.mixer.music.get_busy():
                 sleep(1)
 
@@ -373,6 +375,13 @@ if __name__ == '__main__':
                         type=int,
                         default=100,
                         help="The volume range to use.")
+    parser.add_argument('--skip',
+                        type=int,
+                        default=0,
+                        metavar='N',
+                        help="Skip the first N commits " +
+                        "(comes in handy if the repo started " +
+                        "with some huge commits)")
 
     args = parser.parse_args()
 
@@ -416,7 +425,8 @@ if __name__ == '__main__':
                             verbose=args.verbose,
                             scale=scales[args.scale][1],
                             program=programs[args.program],
-                            volume_range=args.volume_range)
+                            volume_range=args.volume_range,
+                            skip=args.skip)
 
     except InvalidGitRepositoryError:
         print("{} is not a valid Git repository" \
