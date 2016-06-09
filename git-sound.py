@@ -125,6 +125,7 @@ class GitSoundWindow(object):
         self.builder = self.Gtk.Builder()
         self.builder.add_from_file('git-sound.ui')
 
+        self.win = self.builder.get_object('main-window')
         self.play_button = self.builder.get_object('play-button')
         self.stop_button = self.builder.get_object('stop-button')
 
@@ -233,6 +234,9 @@ class GitSoundWindow(object):
         self.Gtk.main_iteration_do(False)
 
     def update_play_pos(self):
+        if self.gitmidi is None:
+            return
+
         position = self.gitmidi.get_play_pos()
 
         if position is None:
@@ -262,6 +266,23 @@ class GitSoundWindow(object):
     def stop_midi(self):
         if self.gitmidi is not None:
             self.gitmidi.stop()
+
+    def __save(self, dialog, response_id):
+        if response_id == self.Gtk.ResponseType.OK:
+            save_file = dialog.get_file().get_path()
+            dialog.destroy()
+            self.gitmidi.export_file(save_file)
+
+    def save_midi(self):
+        dialog = self.Gtk.FileChooserDialog(
+            u"Save As…",
+            self.win,
+            self.Gtk.FileChooserAction.SAVE,
+            ("Save", self.Gtk.ResponseType.OK))
+        dialog.set_do_overwrite_confirmation(True)
+
+        dialog.connect('response', self.__save)
+        dialog.run()
 
     def start(self):
         program_store = self.builder.get_object('program-list')
@@ -296,13 +317,13 @@ class GitSoundWindow(object):
             'generate_repo': lambda button: self.generate_repo(button),
             'play_midi': lambda button: self.play_midi(),
             'stop_midi': lambda button: self.stop_midi(),
+            'save_midi': lambda button: self.save_midi(),
         })
 
         self.progressbar = self.builder.get_object('generate-progress')
 
-        win = self.builder.get_object('main-window')
-        win.connect("delete-event", self.Gtk.main_quit)
-        win.show_all()
+        self.win.connect("delete-event", self.Gtk.main_quit)
+        self.win.show_all()
         self.Gtk.main()
 
         sys.exit(0)
