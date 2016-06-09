@@ -360,6 +360,9 @@ class GitMIDI(MIDIFile):
 
             self.__playing = False
 
+    def stop(self):
+        self.mixer.music.stop()
+
     def get_play_pos(self):
         if not self.__playing:
             return None
