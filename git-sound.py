@@ -159,6 +159,7 @@ class GitSoundWindow(object):
         self.scale_combo = self.builder.get_object('scale-combo')
         self.chooser_button = self.builder.get_object('repo-chooser')
         self.notelen_spin = self.builder.get_object('notelen-spin')
+        self.beatlen_spin = self.builder.get_object('beatlen-spin')
 
         self.gitmidi = None
 
@@ -293,6 +294,7 @@ class GitSoundWindow(object):
         skip = int(self.skip_spin.get_value())
         vol_deviation = int(self.vol_spin.get_value())
         notelen = self.notelen_spin.get_value()
+        beatlen = int(self.beatlen_spin.get_value()) or None
 
         self.set_status("Generating data")
         self.progressbar.set_fraction(0.0)
@@ -304,7 +306,8 @@ class GitSoundWindow(object):
                                program=PROGRAMS[program_selected],
                                volume_range=vol_deviation,
                                skip=skip,
-                               note_duration=notelen)
+                               note_duration=notelen,
+                               max_beat_len=beatlen)
 
         self.gitmidi.gen_repo_data(callback=self.genrepo_cb)
         self.gitmidi.generate_midi(callback=self.genrepo_cb)
