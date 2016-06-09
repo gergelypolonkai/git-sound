@@ -191,12 +191,15 @@ class GitMIDI(MIDIFile):
 
         return self.__scale[note_num]
 
-    def gen_beat(self, commit):
+    def gen_beat(self, commit, callback=None):
         stat = commit.stats
 
         file_notes = []
 
         for file_name, file_stat in stat.files.items():
+            if callback is not None:
+                callback(max_count=None, current=None)
+
             volume_mod = self.__program['file'].get('volume', 0)
             file_notes.append({
                 'note': self.sha_to_note(get_file_sha(commit, file_name)) +
@@ -206,7 +209,11 @@ class GitMIDI(MIDIFile):
                                           volume_mod),
             })
 
+        if callback is not None:
+            callback(max_count=None, current=None)
+
         volume_mod = self.__program['commit'].get('volume', 0)
+
         return {
             'commit_note': self.sha_to_note(commit.hexsha) +
             self.__program['commit']['octave'] * 12,
@@ -216,7 +223,7 @@ class GitMIDI(MIDIFile):
             'file_notes': file_notes,
         }
 
-    def gen_repo_data(self, force=False):
+    def gen_repo_data(self, force=False, callback=None):
         """
         Populate __repo_data with the Git history data. If force is
         False and the repo_data is already calculated, we do not do
@@ -242,6 +249,9 @@ class GitMIDI(MIDIFile):
 
             commit = to_process.pop()
 
+            if callback is not None:
+                callback(max_count=None, current=None)
+
             if not commit in self.__repo_data:
                 self.__repo_data.append(commit)
                 to_process += commit.parents
@@ -255,8 +265,11 @@ class GitMIDI(MIDIFile):
         if self.__verbose:
             print("Generating MIDI data…")
 
-        self.git_log = map(lambda commit: self.gen_beat(commit),
-                           self.__repo_data[self.__skip:])
+        self.git_log = map(
+            lambda commit: self.gen_beat(
+                commit,
+                callback=callback),
+            self.__repo_data[self.__skip:])
 
     @property
     def repo_data(self):
@@ -277,7 +290,7 @@ class GitMIDI(MIDIFile):
             self.mem_file.seek(0)
             shutil.copyfileobj(self.mem_file, f)
 
-    def generate_midi(self):
+    def generate_midi(self, callback=None):
         if self.__verbose:
             print("Creating MIDI…")
 
@@ -289,9 +302,16 @@ class GitMIDI(MIDIFile):
         # Duration of one note
         duration = 0.3
 
+        log_length = len(self.git_log)
+        current = 0
+
         # WRITE THE SEQUENCE
         for section in self.git_log:
+            current += 1
             section_len = len(section['file_notes']) * duration
+
+            if callback is not None:
+                callback(max_count=log_length, current=current)
 
             # Add a long note
             if self.__need_commits:
