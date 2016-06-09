@@ -160,6 +160,8 @@ class GitSoundWindow(object):
         self.chooser_button = self.builder.get_object('repo-chooser')
         self.notelen_spin = self.builder.get_object('notelen-spin')
         self.beatlen_spin = self.builder.get_object('beatlen-spin')
+        self.generate_button = self.builder.get_object('generate-button')
+        self.save_button = self.builder.get_object('save-button')
 
         self.gitmidi = None
 
@@ -253,22 +255,19 @@ class GitSoundWindow(object):
         data is already generated.
         """
 
-        generate_button = self.builder.get_object('generate-button')
-        save_button = self.builder.get_object('save-button')
+        self.stop_button.set_sensitive(False)
 
         if disable_all:
-            generate_button.set_sensitive(False)
+            self.generate_button.set_sensitive(False)
             self.play_button.set_sensitive(False)
-            self.stop_button.set_sensitive(False)
-            save_button.set_sensitive(False)
+            self.save_button.set_sensitive(False)
 
             return
 
         if self.gitmidi is not None:
-            generate_button.set_sensitive(False)
+            self.generate_button.set_sensitive(False)
             self.play_button.set_sensitive(True)
-            self.stop_button.set_sensitive(False)
-            save_button.set_sensitive(True)
+            self.save_button.set_sensitive(True)
 
             return
 
@@ -277,10 +276,9 @@ class GitSoundWindow(object):
         scale_selected = self.scale_combo.get_active_id() is not None
 
         if branch_selected and program_selected and scale_selected:
-            generate_button.set_sensitive(True)
+            self.generate_button.set_sensitive(True)
             self.play_button.set_sensitive(False)
-            self.stop_button.set_sensitive(False)
-            save_button.set_sensitive(False)
+            self.save_button.set_sensitive(False)
 
     def generate_repo(self):
         """
