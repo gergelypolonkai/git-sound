@@ -10,7 +10,7 @@ import shutil
 
 from midiutil.MidiFile import MIDIFile
 from StringIO import StringIO
-from git import Repo
+from git import Repo, Tree
 from git.objects.blob import Blob
 from time import sleep
 
@@ -32,7 +32,10 @@ def get_file_sha(commit, file_name):
 
     while True:
         try:
-            tree = tree[elements.pop(0)]
+            element = elements.pop(0)
+
+            if isinstance(tree[element], Tree):
+                tree = tree[element]
         except (KeyError, IndexError):
             # The file has been deleted, return the hash of an empty file
             return 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391'
