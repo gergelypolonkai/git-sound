@@ -241,9 +241,13 @@ class GitMIDI(MIDIFile):
         commit_count = len(commits_to_process)
 
         for commit in commits_to_process:
+            current_commit += 1
+
             if callback:
-                current_commit += 1
                 callback(commit_count, current_commit)
+
+            if self.__verbose:
+                print("{}/{}".format(current_commit, commit_count))
 
             self.__git_log.append(self.gen_beat(commit))
 
@@ -301,6 +305,9 @@ class GitMIDI(MIDIFile):
 
             if callback is not None:
                 callback(log_length, current)
+
+            if self.__verbose:
+                print("{}/{}".format(current, log_length))
 
             # Add a long note
             if self.__need_commits:
