@@ -113,7 +113,7 @@ class GitMIDI(MIDIFile):
         self.__playing = False
         self.__skip = skip or 0
         self.__note_duration = note_duration or 0.3
-        self.__max_beat_len = max_beat_len or 10
+        self.__max_beat_len = max_beat_len
         self.__tempo = tempo or 120
 
         self.__need_commits = self.__program['commit']['program'] is not None
@@ -159,7 +159,9 @@ class GitMIDI(MIDIFile):
         for file_name, file_stat in stat.files.items():
             file_count += 1
 
-            if file_count > self.__max_beat_len:
+            if self.__max_beat_len is not None and \
+               self.__max_beat_len != 0 and \
+               file_count > self.__max_beat_len:
                 break
 
             volume_mod = self.__program['file'].get('volume', 0)
