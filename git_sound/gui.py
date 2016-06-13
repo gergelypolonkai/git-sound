@@ -125,9 +125,9 @@ class GitSoundWindow(object):
         (repository, branch, scale or program).
         """
 
+        self.stop_midi()
         self.gitmidi = None
         self.set_buttons_sensitivity()
-        self.stop_midi()
 
     def set_buttons_sensitivity(self, disable_all=False):
         """
