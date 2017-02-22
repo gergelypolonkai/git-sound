@@ -7,12 +7,13 @@ from __future__ import print_function
 
 import os
 import shutil
+from time import sleep
+
+from io import BytesIO
 
 from midiutil.MidiFile import MIDIFile
-from StringIO import StringIO
 from git import Repo, Tree
 from git.objects.blob import Blob
-from time import sleep
 
 try:
     import pygame
@@ -108,7 +109,7 @@ class GitMIDI(MIDIFile):
         self.__branch_head = None
         self.__repo_data = None
         self.__git_log = []
-        self.__mem_file = StringIO()
+        self.__mem_file = BytesIO()
         self.__scale = scale
         self.__program = program
         self.__volume_deviation = min(abs(63 - (volume_range or 107)), 63)
@@ -144,8 +145,7 @@ class GitMIDI(MIDIFile):
         Calculate note based on an SHA1 hash
         """
 
-        note_num = reduce(lambda res, digit: res + int(digit, 16),
-                          list(str(sha)), 0) % len(self.__scale)
+        note_num = sum([int(c, 16) for c in str(sha)]) % len(self.__scale)
 
         return self.__scale[note_num]
 
@@ -278,9 +278,9 @@ class GitMIDI(MIDIFile):
         if not self.__written:
             self.write_mem()
 
-        with open(filename, 'w') as midi_file:
+        with open(filename, 'wb') as midi_file:
             self.__mem_file.seek(0)
-            shutil.copyfileobj(self.__mem_file, midi_file)
+            midi_file.write(self.__mem_file.getbuffer())
 
     def generate_midi(self, callback=None):
         """
